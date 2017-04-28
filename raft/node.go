@@ -314,14 +314,17 @@ func (n *node) run(r *raft) {
 		// TODO: maybe buffer the config propose if there exists one (the way
 		// described in raft dissertation)
 		// Currently it is dropped in Step silently.
+		//当kvstore收到配置添加请求时会向propc通道发送kv数据，这里便能获得该io事件进行配置日志追加处理
 		case m := <-propc:
 			m.From = r.id
 			r.Step(m)
+		//当node.step()触发消息时会将消息写入到n.recvc通道，这里处理该消息
 		case m := <-n.recvc:
 			// filter out response message from unknown From.
 			if _, ok := r.prs[m.From]; ok || !IsResponseMsg(m.Type) {
 				r.Step(m) // raft never returns an error
 			}
+		//当kvstore收到集群变更时会向n.confc通道发送数据，这里监听该事件进行处理
 		case cc := <-n.confc:
 			if cc.NodeID == None {
 				r.resetPendingConf()
@@ -350,8 +353,10 @@ func (n *node) run(r *raft) {
 			case n.confstatec <- pb.ConfState{Nodes: r.nodes()}:
 			case <-n.done:
 			}
+		//当为follower或candiate角色时，tick函数为发起选举函数，当为leader角色时tick函数为发送心跳函数
 		case <-n.tickc:
 			r.tick()
+		//写入rd到readyc通道
 		case readyc <- rd:
 			if rd.SoftState != nil {
 				prevSoftSt = rd.SoftState
@@ -370,6 +375,7 @@ func (n *node) run(r *raft) {
 
 			r.msgs = nil
 			r.readStates = nil
+			//写入一个消息后，advancec赋值为n.advancec，使得下次循环readyc置为nil
 			advancec = n.advancec
 		case <-advancec:
 			if prevHardSt.Commit != 0 {
@@ -380,6 +386,8 @@ func (n *node) run(r *raft) {
 				havePrevLastUnstablei = false
 			}
 			r.raftLog.stableSnapTo(prevSnapi)
+			//设置advancec = nil，使得可以产生新的ready
+			//每次raft执行完一个消息，会调用node.Advance()，向n.advancec通道写入一个空数据
 			advancec = nil
 		case c := <-n.status:
 			c <- getStatus(r)

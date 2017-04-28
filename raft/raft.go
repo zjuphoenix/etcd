@@ -561,6 +561,7 @@ func (r *raft) tickHeartbeat() {
 func (r *raft) becomeFollower(term uint64, lead uint64) {
 	r.step = stepFollower
 	r.reset(term)
+	//当是follower角色时设置tick函数为tickElection
 	r.tick = r.tickElection
 	r.lead = lead
 	r.state = StateFollower
@@ -601,6 +602,7 @@ func (r *raft) becomeLeader() {
 	}
 	r.step = stepLeader
 	r.reset(r.Term)
+	//当是leader角色时设置tick函数为tickHeartbeat
 	r.tick = r.tickHeartbeat
 	r.lead = r.id
 	r.state = StateLeader

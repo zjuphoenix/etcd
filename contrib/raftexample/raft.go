@@ -102,6 +102,7 @@ func newRaftNode(id int, peers []string, join bool, getSnapshot func() ([]byte, 
 		snapshotterReady: make(chan *snap.Snapshotter, 1),
 		// rest of structure populated after WAL replay
 	}
+	//启动raft
 	go rc.startRaft()
 	return commitC, errorC, rc.snapshotterReady
 }
@@ -120,6 +121,7 @@ func (rc *raftNode) saveSnap(snap raftpb.Snapshot) error {
 	return rc.wal.ReleaseLockTo(snap.Metadata.Index)
 }
 
+//通过已经应用到状态机的日志索引将ents中已经应用到状态机的日志进行删除
 func (rc *raftNode) entriesToApply(ents []raftpb.Entry) (nents []raftpb.Entry) {
 	if len(ents) == 0 {
 		return
@@ -395,11 +397,13 @@ func (rc *raftNode) serveChannels() {
 
 		for rc.proposeC != nil && rc.confChangeC != nil {
 			select {
+			//当kvstore收到配置添加请求时会向rc.proposeC通道发送kv数据，这里变更获取该io事件处理日志追加
 			case prop, ok := <-rc.proposeC:
 				if !ok {
 					rc.proposeC = nil
 				} else {
 					// blocks until accepted by raft state machine
+					//讲kv数据交给当前node处理
 					rc.node.Propose(context.TODO(), []byte(prop))
 				}
 
@@ -432,6 +436,7 @@ func (rc *raftNode) serveChannels() {
 				rc.publishSnapshot(rd.Snapshot)
 			}
 			rc.raftStorage.Append(rd.Entries)
+			//处理消息
 			rc.transport.Send(rd.Messages)
 			if ok := rc.publishEntries(rc.entriesToApply(rd.CommittedEntries)); !ok {
 				rc.stop()

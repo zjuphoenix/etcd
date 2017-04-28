@@ -28,8 +28,10 @@ func main() {
 	join := flag.Bool("join", false, "join an existing cluster")
 	flag.Parse()
 
+	//当kvstore中收到配置添加请求时会向proposeC通道发送kv数据，在raft中会得到proposeC通道的事件进行处理
 	proposeC := make(chan string)
 	defer close(proposeC)
+	//当kvstore中收到集群节点变更请求时会向confChangeC通道发送集群变更数据，在raft中会得到confChangeC通道的事件进行处理
 	confChangeC := make(chan raftpb.ConfChange)
 	defer close(confChangeC)
 
