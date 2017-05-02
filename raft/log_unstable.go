@@ -123,16 +123,19 @@ func (u *unstable) restore(s pb.Snapshot) {
 func (u *unstable) truncateAndAppend(ents []pb.Entry) {
 	after := ents[0].Index
 	switch {
+	//如果要追加的第一条日志的索引正好等于unstable的下一条日志位置，则直接追加
 	case after == u.offset+uint64(len(u.entries)):
 		// after is the next index in the u.entries
 		// directly append
 		u.entries = append(u.entries, ents...)
+	//如果要追加的第一条日志的索引小于unstable的下一条日志位置
 	case after <= u.offset:
 		u.logger.Infof("replace the unstable entries from index %d", after)
 		// The log is being truncated to before our current offset
 		// portion, so set the offset and replace the entries
 		u.offset = after
 		u.entries = ents
+	//如果要追加的第一条日志的索引大于unstable的下一条日志位置
 	default:
 		// truncate to after and copy to u.entries
 		// then append

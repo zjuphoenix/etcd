@@ -19,6 +19,7 @@ import (
 
 	pb "github.com/coreos/etcd/raft/raftpb"
 	"golang.org/x/net/context"
+	"fmt"
 )
 
 type SnapshotStatus int
@@ -288,6 +289,8 @@ func (n *node) run(r *raft) {
 			readyc = nil
 		} else {
 			rd = newReady(r, prevSoftSt, prevHardSt)
+			//只有真正有数据时才会将readyc赋值为n.readyc，否则一直为nil，这样没数据时(比如心跳请求)数据就不能写入到n.readyc通道
+			//每次循环都要创建这个ready对象是不是不太好？
 			if rd.containsUpdates() {
 				readyc = n.readyc
 			} else {
@@ -318,7 +321,7 @@ func (n *node) run(r *raft) {
 		case m := <-propc:
 			m.From = r.id
 			r.Step(m)
-		//当node.step()触发消息时会将消息写入到n.recvc通道，这里处理该消息
+		//当node通过网络发送请求收到的响应会写入到n.recvc通道，这里处理该消息
 		case m := <-n.recvc:
 			// filter out response message from unknown From.
 			if _, ok := r.prs[m.From]; ok || !IsResponseMsg(m.Type) {
@@ -353,10 +356,10 @@ func (n *node) run(r *raft) {
 			case n.confstatec <- pb.ConfState{Nodes: r.nodes()}:
 			case <-n.done:
 			}
-		//当为follower或candiate角色时，tick函数为发起选举函数，当为leader角色时tick函数为发送心跳函数
+		//当为follower或candiate角色时，tick函数为发起选举函数，当为leader角色时tick函数为tickHeartbeat
 		case <-n.tickc:
 			r.tick()
-		//写入rd到readyc通道
+		//写入rd到readyc通道，只有有数据时readyc才不为nil，这里才能将消息发送到readyc通道
 		case readyc <- rd:
 			if rd.SoftState != nil {
 				prevSoftSt = rd.SoftState
@@ -411,6 +414,7 @@ func (n *node) Tick() {
 
 func (n *node) Campaign(ctx context.Context) error { return n.step(ctx, pb.Message{Type: pb.MsgHup}) }
 
+//当kvstore收到添加配置请求时会调用node的Propose方法，data为k,v
 func (n *node) Propose(ctx context.Context, data []byte) error {
 	return n.step(ctx, pb.Message{Type: pb.MsgProp, Entries: []pb.Entry{{Data: data}}})
 }
@@ -437,10 +441,12 @@ func (n *node) ProposeConfChange(ctx context.Context, cc pb.ConfChange) error {
 func (n *node) step(ctx context.Context, m pb.Message) error {
 	ch := n.recvc
 	if m.Type == pb.MsgProp {
+		//当是追加配置请求时ch为n.propc
 		ch = n.propc
 	}
 
 	select {
+	//当是追加配置请求时会向ch（即n.propc）通道写入数据（消息类型和数据）
 	case ch <- m:
 		return nil
 	case <-ctx.Done():

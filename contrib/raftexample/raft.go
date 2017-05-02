@@ -115,6 +115,7 @@ func (rc *raftNode) saveSnap(snap raftpb.Snapshot) error {
 		Index: snap.Metadata.Index,
 		Term:  snap.Metadata.Term,
 	}
+	//写入到snapshot的日志可以在wal中删除啦
 	if err := rc.wal.SaveSnapshot(walSnap); err != nil {
 		return err
 	}
@@ -209,6 +210,7 @@ func (rc *raftNode) openWAL(snapshot *raftpb.Snapshot) *wal.WAL {
 	}
 
 	walsnap := walpb.Snapshot{}
+	//从snapshot读取snapshot的最新索引和term赋值给walsnap
 	if snapshot != nil {
 		walsnap.Index, walsnap.Term = snapshot.Metadata.Index, snapshot.Metadata.Term
 	}
@@ -309,7 +311,9 @@ func (rc *raftNode) startRaft() {
 		}
 	}
 
+	//监听并处理raft停止命令
 	go rc.serveRaft()
+	//监听配置添加等命令
 	go rc.serveChannels()
 }
 
@@ -369,6 +373,7 @@ func (rc *raftNode) maybeTriggerSnapshot() {
 	if rc.appliedIndex > snapshotCatchUpEntriesN {
 		compactIndex = rc.appliedIndex - snapshotCatchUpEntriesN
 	}
+	//日志压缩
 	if err := rc.raftStorage.Compact(compactIndex); err != nil {
 		panic(err)
 	}
@@ -406,7 +411,7 @@ func (rc *raftNode) serveChannels() {
 					//讲kv数据交给当前node处理
 					rc.node.Propose(context.TODO(), []byte(prop))
 				}
-
+			//集群变更事件
 			case cc, ok := <-rc.confChangeC:
 				if !ok {
 					rc.confChangeC = nil
@@ -424,10 +429,12 @@ func (rc *raftNode) serveChannels() {
 	// event loop on raft state machine updates
 	for {
 		select {
+		//根据角色的不同Tick()为不同的处理函数
 		case <-ticker.C:
 			rc.node.Tick()
 
 		// store raft entries to wal, then publish over commit channel
+		//监听node.readyc通道事件
 		case rd := <-rc.node.Ready():
 			rc.wal.Save(rd.HardState, rd.Entries)
 			if !raft.IsEmptySnap(rd.Snapshot) {

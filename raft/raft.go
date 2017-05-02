@@ -481,8 +481,11 @@ func (r *raft) maybeCommit() bool {
 	for id := range r.prs {
 		mis = append(mis, r.prs[id].Match)
 	}
+	//mis中保存着复制到每个server节点的日志索引，这里进行从大到小排序
 	sort.Sort(sort.Reverse(mis))
+	//如果节点数量为5，r.quorum()-1＝2，则在5个节点中日志第三新的节点的最新日志索引就是复制到过半数节点的日志索引，这个位置的日志可以提交啦
 	mci := mis[r.quorum()-1]
+	//尝试提交日志
 	return r.raftLog.maybeCommit(mci, r.Term)
 }
 
@@ -681,6 +684,7 @@ func (r *raft) poll(id uint64, t pb.MessageType, v bool) (granted int) {
 func (r *raft) Step(m pb.Message) error {
 	// Handle the message term, which may result in our stepping down to a follower.
 	switch {
+	//配置添加请求因为没有设置Term数据所以这里不执行操作
 	case m.Term == 0:
 		// local message
 	case m.Term > r.Term:
@@ -777,6 +781,7 @@ func (r *raft) Step(m pb.Message) error {
 		}
 
 	default:
+		//当角色为leader并且为追加配置请求时，step函数为stepLeader
 		r.step(r, m)
 	}
 	return nil
@@ -797,6 +802,7 @@ func stepLeader(r *raft, m pb.Message) {
 		}
 		return
 	case pb.MsgProp:
+		//配置追加请求
 		if len(m.Entries) == 0 {
 			r.logger.Panicf("%x stepped empty MsgProp", r.id)
 		}
@@ -885,9 +891,11 @@ func stepLeader(r *raft, m pb.Message) {
 					r.logger.Debugf("%x snapshot aborted, resumed sending replication messages to %x [%s]", r.id, m.From, pr)
 					pr.becomeProbe()
 				case pr.State == ProgressStateReplicate:
+					//pr.ins用于限制发送消息的速率，当发送时将日志索引写入到pr.ins，pr.ins有数量限制，当发送消息收到回复后再把pr.ins中该发送成功日志的索引在pr.ins中移除掉
 					pr.ins.freeTo(m.Index)
 				}
 
+				//收到follower的日志追加成功响应后判断是否能commit一部分日志
 				if r.maybeCommit() {
 					r.bcastAppend()
 				} else if oldPaused {
@@ -903,6 +911,7 @@ func stepLeader(r *raft, m pb.Message) {
 			}
 		}
 	case pb.MsgHeartbeatResp:
+		//leader处理发送给follower的心跳的响应
 		pr.RecentActive = true
 		pr.resume()
 
@@ -910,6 +919,7 @@ func stepLeader(r *raft, m pb.Message) {
 		if pr.State == ProgressStateReplicate && pr.ins.full() {
 			pr.ins.freeFirstOne()
 		}
+		//如果follower已经匹配的日志位置小于leader的最新日志位置,则发送追加日志rpc到follower
 		if pr.Match < r.raftLog.lastIndex() {
 			r.sendAppend(m.From)
 		}
@@ -1038,6 +1048,7 @@ func stepFollower(r *raft, m pb.Message) {
 		}
 		m.To = r.lead
 		r.send(m)
+	//follower收到leaer的追加日志请求
 	case pb.MsgApp:
 		r.electionElapsed = 0
 		r.lead = m.From
@@ -1084,12 +1095,14 @@ func stepFollower(r *raft, m pb.Message) {
 }
 
 func (r *raft) handleAppendEntries(m pb.Message) {
+	//如果当前follower收到leader追加的日志索引已经提交过了，则直接响应，且响应中的日志索引为当前最新提交的索引
 	if m.Index < r.raftLog.committed {
 		r.send(pb.Message{To: m.From, Type: pb.MsgAppResp, Index: r.raftLog.committed})
 		return
 	}
 
 	if mlastIndex, ok := r.raftLog.maybeAppend(m.Index, m.LogTerm, m.Commit, m.Entries...); ok {
+		//
 		r.send(pb.Message{To: m.From, Type: pb.MsgAppResp, Index: mlastIndex})
 	} else {
 		r.logger.Debugf("%x [logterm: %d, index: %d] rejected msgApp [logterm: %d, index: %d] from %x",
@@ -1097,7 +1110,7 @@ func (r *raft) handleAppendEntries(m pb.Message) {
 		r.send(pb.Message{To: m.From, Type: pb.MsgAppResp, Index: m.Index, Reject: true, RejectHint: r.raftLog.lastIndex()})
 	}
 }
-
+//心跳请求的处理逻辑是根据leader传递来的日志提交索引来设置follower日志的提交位置（只是设置一下提交位置，并未真正执行提交操作）
 func (r *raft) handleHeartbeat(m pb.Message) {
 	r.raftLog.commitTo(m.Commit)
 	r.send(pb.Message{To: m.From, Type: pb.MsgHeartbeatResp, Context: m.Context})

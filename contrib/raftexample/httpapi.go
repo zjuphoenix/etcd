@@ -44,6 +44,7 @@ func (h *httpKVAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		// Optimistic-- no waiting for ack from raft. Value is not yet
 		// committed so a subsequent GET on the key may return old value
+		//不等待leader提交该日志就响应client
 		w.WriteHeader(http.StatusNoContent)
 	case r.Method == "GET":
 		if v, ok := h.store.Lookup(key); ok {

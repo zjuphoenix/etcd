@@ -74,8 +74,12 @@ func (l *raftLog) String() string {
 // maybeAppend returns (0, false) if the entries cannot be appended. Otherwise,
 // it returns (last index of new entries, true).
 func (l *raftLog) maybeAppend(index, logTerm, committed uint64, ents ...pb.Entry) (lastnewi uint64, ok bool) {
+	//index，logTerm为leader上次发送给该follower的日志索引和日志的term，committed是可以提交的日志索引，ents为发过来的日志条目
+	//只有follower能够匹配eader上次发送的日志索引和term，才能正常响应
 	if l.matchTerm(index, logTerm) {
+		//最新的日志索引
 		lastnewi = index + uint64(len(ents))
+		//获取冲突的日志索引，有些情况下leader发过来的日志不能直接追加，索引需要找到最新匹配的位置，从该位置之后的日志全部被leader覆盖
 		ci := l.findConflict(ents)
 		switch {
 		case ci == 0:
@@ -85,6 +89,7 @@ func (l *raftLog) maybeAppend(index, logTerm, committed uint64, ents ...pb.Entry
 			offset := index + 1
 			l.append(ents[ci-offset:]...)
 		}
+		//如果leader的已提交的日志索引大于leader复制给当前follower的最新日志的索引，说明follower落后了，对于这次复制来的日志全都直接提交，否则提交leader已经提交的日志索引的日志
 		l.commitTo(min(committed, lastnewi))
 		return lastnewi, true
 	}
@@ -216,6 +221,7 @@ func (l *raftLog) lastTerm() uint64 {
 	return t
 }
 
+//在i位置的日志的term
 func (l *raftLog) term(i uint64) (uint64, error) {
 	// the valid term range is [index of dummy entry, last index]
 	dummyIndex := l.firstIndex() - 1
@@ -223,7 +229,7 @@ func (l *raftLog) term(i uint64) (uint64, error) {
 		// TODO: return an error instead?
 		return 0, nil
 	}
-
+	//先从未提交的日志中查询是否存在该索引的日志的term，没有的话再从storage中获取
 	if t, ok := l.unstable.maybeTerm(i); ok {
 		return t, nil
 	}
@@ -277,6 +283,7 @@ func (l *raftLog) matchTerm(i, term uint64) bool {
 }
 
 func (l *raftLog) maybeCommit(maxIndex, term uint64) bool {
+	//满足两个条件的日志可以被提交，1:已经复制到过半数，且该日志的索引大于已经提交的日志索引(避免重复提交)，2:该日志的term与当前term相同
 	if maxIndex > l.committed && l.zeroTermOnErrCompacted(l.term(maxIndex)) == term {
 		l.commitTo(maxIndex)
 		return true
