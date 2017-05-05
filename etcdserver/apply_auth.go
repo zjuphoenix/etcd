@@ -17,9 +17,9 @@ package etcdserver
 import (
 	"sync"
 
-	"github.com/coreos/etcd/auth"
-	pb "github.com/coreos/etcd/etcdserver/etcdserverpb"
-	"github.com/coreos/etcd/mvcc"
+	"../auth"
+	pb "../etcdserver/etcdserverpb"
+	"../mvcc"
 )
 
 type authApplierV3 struct {

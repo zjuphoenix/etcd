@@ -13,3 +13,7 @@
 tools/functional-tester/docker/bin
 hack/tls-setup/certs
 .idea
+.DS_Store
+contrib/raftexample/raftexample-1/
+contrib/raftexample/raftexample-2/
+contrib/raftexample/raftexample-3/

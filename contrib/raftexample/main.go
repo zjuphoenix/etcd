@@ -18,7 +18,7 @@ import (
 	"flag"
 	"strings"
 
-	"github.com/coreos/etcd/raft/raftpb"
+	"../../raft/raftpb"
 )
 
 func main() {
@@ -38,8 +38,10 @@ func main() {
 	// raft provides a commit stream for the proposals from the http api
 	var kvs *kvstore
 	getSnapshot := func() ([]byte, error) { return kvs.getSnapshot() }
+	//当raft中数据可以提交时会向commitC通道发送消息，这样kvstore就可以监听该通道消息，当收到提交消息时会修改kvstore内存中的值
 	commitC, errorC, snapshotterReady := newRaftNode(*id, strings.Split(*cluster, ","), *join, getSnapshot, proposeC, confChangeC)
 
+	//直到snapshotterReady通道有数据了，即snapshot可用了，才可以创建kvstore实例
 	kvs = newKVStore(<-snapshotterReady, proposeC, commitC, errorC)
 
 	// the key-value http handler will propose updates to raft

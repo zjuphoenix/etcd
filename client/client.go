@@ -28,7 +28,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/coreos/etcd/version"
+	"../version"
 
 	"golang.org/x/net/context"
 )

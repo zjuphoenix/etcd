@@ -20,10 +20,10 @@ import (
 	"io"
 	"time"
 
-	"github.com/coreos/etcd/etcdserver/stats"
-	"github.com/coreos/etcd/pkg/pbutil"
-	"github.com/coreos/etcd/pkg/types"
-	"github.com/coreos/etcd/raft/raftpb"
+	"../etcdserver/stats"
+	"../pkg/pbutil"
+	"../pkg/types"
+	"../raft/raftpb"
 )
 
 const (
@@ -83,6 +83,7 @@ func newMsgAppV2Encoder(w io.Writer, fs *stats.FollowerStats) *msgAppV2Encoder {
 }
 
 func (enc *msgAppV2Encoder) encode(m *raftpb.Message) error {
+	//fmt.Println("msgAppV2Encoder encode:", m)
 	start := time.Now()
 	switch {
 	case isLinkHeartbeatMessage(m):
@@ -92,9 +93,6 @@ func (enc *msgAppV2Encoder) encode(m *raftpb.Message) error {
 		}
 	case enc.index == m.Index && enc.term == m.LogTerm && m.LogTerm == m.Term:
 		enc.uint8buf[0] = byte(msgTypeAppEntries)
-		if _, err := enc.w.Write(enc.uint8buf); err != nil {
-			return err
-		}
 		// write length of entries
 		binary.BigEndian.PutUint64(enc.uint64buf, uint64(len(m.Entries)))
 		if _, err := enc.w.Write(enc.uint64buf); err != nil {
@@ -122,8 +120,15 @@ func (enc *msgAppV2Encoder) encode(m *raftpb.Message) error {
 		}
 		// write commit index
 		binary.BigEndian.PutUint64(enc.uint64buf, m.Commit)
-		if _, err := enc.w.Write(enc.uint64buf); err != nil {
+		/*if _, err := enc.w.Write(enc.uint64buf); err != nil {
 			return err
+		}*/
+		res, err := enc.w.Write(enc.uint64buf)
+		if err != nil {
+			return err
+		}
+		if m.Type != raftpb.MsgHeartbeatResp && m.Type != raftpb.MsgHeartbeat {
+			fmt.Println("msgAppV2Encoder encode response:", res)
 		}
 		enc.fs.Succ(time.Since(start))
 	default:

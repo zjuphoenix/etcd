@@ -16,7 +16,7 @@
 
 package e2e
 
-import "github.com/coreos/etcd/pkg/expect"
+import "../pkg/expect"
 
 const noOutputLineCount = 0 // regular binaries emit no extra lines
 

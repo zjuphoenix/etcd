@@ -25,7 +25,7 @@ import (
 	"sync"
 	"time"
 
-	pb "github.com/coreos/etcd/raft/raftpb"
+	pb "../raft/raftpb"
 )
 
 // None is a placeholder node ID used when there is no leader.

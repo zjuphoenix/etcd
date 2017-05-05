@@ -17,9 +17,8 @@ package raft
 import (
 	"errors"
 
-	pb "github.com/coreos/etcd/raft/raftpb"
+	pb "../raft/raftpb"
 	"golang.org/x/net/context"
-	"fmt"
 )
 
 type SnapshotStatus int
@@ -290,6 +289,7 @@ func (n *node) run(r *raft) {
 		} else {
 			rd = newReady(r, prevSoftSt, prevHardSt)
 			//只有真正有数据时才会将readyc赋值为n.readyc，否则一直为nil，这样没数据时(比如心跳请求)数据就不能写入到n.readyc通道
+			//相当于每次循环会检查是否有消息，有的话就把readyc = n.readyc，这样就可以向n.readyc写入消息了，然后kvstore因为监听了n.readyc通道，所以能收到该消息
 			//每次循环都要创建这个ready对象是不是不太好？
 			if rd.containsUpdates() {
 				readyc = n.readyc
@@ -327,7 +327,10 @@ func (n *node) run(r *raft) {
 			if _, ok := r.prs[m.From]; ok || !IsResponseMsg(m.Type) {
 				r.Step(m) // raft never returns an error
 			}
-		//当kvstore收到集群变更时会向n.confc通道发送数据，这里监听该事件进行处理
+		//当kvstore收到集群变更时会向kvHttp的confChangeC通道发送消息，
+		// confChangeC通道被raftNode监听，当node检测到集群变更的消息可以提交时会传递给raftNode，
+		// raftNode会ApplyConfChange，向n.confc通道发送数据，这里监听该事件进行处理。
+		// 收到n.confc消息时集群变更的日志已经被提交了
 		case cc := <-n.confc:
 			if cc.NodeID == None {
 				r.resetPendingConf()

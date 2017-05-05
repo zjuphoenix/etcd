@@ -25,12 +25,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/coreos/etcd/etcdserver/stats"
-	"github.com/coreos/etcd/pkg/httputil"
-	"github.com/coreos/etcd/pkg/transport"
-	"github.com/coreos/etcd/pkg/types"
-	"github.com/coreos/etcd/raft/raftpb"
-	"github.com/coreos/etcd/version"
+	"../etcdserver/stats"
+	"../pkg/httputil"
+	"../pkg/transport"
+	"../pkg/types"
+	"../raft/raftpb"
+	"../version"
 	"github.com/coreos/go-semver/semver"
 )
 
@@ -150,6 +150,7 @@ func (cw *streamWriter) run() {
 
 	for {
 		select {
+		//维持与对端的心跳，在心跳异常时关闭连接。此心跳不是raft协议中的心跳
 		case <-heartbeatc:
 			err := enc.encode(&linkHeartbeatMessage)
 			unflushed += linkHeartbeatMessage.Size()
@@ -169,6 +170,9 @@ func (cw *streamWriter) run() {
 			heartbeatc, msgc = nil, nil
 
 		case m := <-msgc:
+			if m.Type != raftpb.MsgHeartbeatResp && m.Type != raftpb.MsgHeartbeat {
+				fmt.Println("stream msg:", m)
+			}
 			err := enc.encode(&m)
 			if err == nil {
 				unflushed += m.Size()
@@ -303,6 +307,7 @@ func (cr *streamReader) run() {
 	t := cr.typ
 	plog.Infof("started streaming with peer %s (%s reader)", cr.peerID, t)
 	for {
+		//与对端建立连接
 		rc, err := cr.dial(t)
 		if err != nil {
 			if err != errUnsupportedStreamType {
@@ -311,6 +316,7 @@ func (cr *streamReader) run() {
 		} else {
 			cr.status.activate()
 			plog.Infof("established a TCP streaming connection with peer %s (%s reader)", cr.peerID, cr.typ)
+			//循环读取对端发过来的数据并处理
 			err := cr.decodeLoop(rc, t)
 			plog.Warningf("lost the TCP streaming connection with peer %s (%s reader)", cr.peerID, cr.typ)
 			switch {
@@ -356,7 +362,6 @@ func (cr *streamReader) decodeLoop(rc io.ReadCloser, t streamType) error {
 		cr.closer = rc
 	}
 	cr.mu.Unlock()
-
 	for {
 		m, err := dec.decode()
 		if err != nil {
@@ -365,7 +370,6 @@ func (cr *streamReader) decodeLoop(rc io.ReadCloser, t streamType) error {
 			cr.mu.Unlock()
 			return err
 		}
-
 		receivedBytes.WithLabelValues(types.ID(m.From).String()).Add(float64(m.Size()))
 
 		cr.mu.Lock()
@@ -387,7 +391,6 @@ func (cr *streamReader) decodeLoop(rc io.ReadCloser, t streamType) error {
 		if m.Type == raftpb.MsgProp {
 			recvc = cr.propc
 		}
-
 		select {
 		case recvc <- m:
 		default:

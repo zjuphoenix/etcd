@@ -18,8 +18,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/coreos/etcd/client"
-	"github.com/coreos/etcd/pkg/transport"
+	"../client"
+	"../pkg/transport"
 )
 
 func discoverEndpoints(dns string, ca string, insecure bool) (endpoints []string) {

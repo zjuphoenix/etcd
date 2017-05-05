@@ -22,11 +22,11 @@ import (
 	"path"
 	"strings"
 
-	pioutil "github.com/coreos/etcd/pkg/ioutil"
-	"github.com/coreos/etcd/pkg/types"
-	"github.com/coreos/etcd/raft/raftpb"
-	"github.com/coreos/etcd/snap"
-	"github.com/coreos/etcd/version"
+	pioutil "../pkg/ioutil"
+	"../pkg/types"
+	"../raft/raftpb"
+	"../snap"
+	"../version"
 	"golang.org/x/net/context"
 )
 
@@ -115,6 +115,7 @@ func (h *pipelineHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		recvFailures.WithLabelValues(r.RemoteAddr).Inc()
 		return
 	}
+	fmt.Println("pipelineHandler:", m)
 
 	receivedBytes.WithLabelValues(types.ID(m.From).String()).Add(float64(len(b)))
 
@@ -319,6 +320,9 @@ func (h *streamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Flusher: w.(http.Flusher),
 		Closer:  c,
 	}
+	//一旦接收到对端的连接，则把该连接attach到自己encoder的writer中，这样自己encoder和对端decoder就能协同工作了，
+	// 对于每个节点，会主动去连接其他节点，连接成功后便通过自己的decoder循环读取该连接的数据，该节点通过该decoder读取其他节点发来的数据；
+	// 当某节点收到其他节点连接请求并连接成功后便把该连接attach到该节点的encoder，该节点通过该encoder向其他节点发送数据；
 	p.attachOutgoingConn(conn)
 	<-c.closeNotify()
 }

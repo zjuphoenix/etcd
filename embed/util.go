@@ -17,7 +17,7 @@ package embed
 import (
 	"path/filepath"
 
-	"github.com/coreos/etcd/wal"
+	"../wal"
 )
 
 func isMemberInitialized(cfg *Config) bool {

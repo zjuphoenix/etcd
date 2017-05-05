@@ -14,14 +14,14 @@
 
 package main
 
-import (
+import  (
 	"bytes"
 	"encoding/gob"
 	"encoding/json"
 	"log"
 	"sync"
 
-	"github.com/coreos/etcd/snap"
+	"../../snap"
 )
 
 // a key-value store backed by raft
@@ -74,12 +74,15 @@ func (s *kvstore) readCommits(commitC <-chan *string, errorC <-chan error) {
 				log.Panic(err)
 			}
 			log.Printf("loading snapshot at term %d and index %d", snapshot.Metadata.Term, snapshot.Metadata.Index)
+			//从snapshot中恢复数据到kvstore，但snapshot里的数据不一定是最新的，
+			// 所以之后还需要根据snapshot的最新日志term和index把wal中的对应的位置之后的entry应用到kvstore，就得到上次kvstore停止前的状态
 			if err := s.recoverFromSnapshot(snapshot.Data); err != nil {
 				log.Panic(err)
 			}
 			continue
 		}
 
+		//当raft node发现有日志可以提交时会向commit发送数据，这里的协程用于处理提交的日志来更新kvstore
 		var dataKv kv
 		dec := gob.NewDecoder(bytes.NewBufferString(*data))
 		if err := dec.Decode(&dataKv); err != nil {

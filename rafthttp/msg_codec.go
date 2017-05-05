@@ -19,8 +19,9 @@ import (
 	"errors"
 	"io"
 
-	"github.com/coreos/etcd/pkg/pbutil"
-	"github.com/coreos/etcd/raft/raftpb"
+	"../pkg/pbutil"
+	"../raft/raftpb"
+	"fmt"
 )
 
 // messageEncoder is a encoder that can encode all kinds of messages.
@@ -33,6 +34,7 @@ func (enc *messageEncoder) encode(m *raftpb.Message) error {
 	if err := binary.Write(enc.w, binary.BigEndian, uint64(m.Size())); err != nil {
 		return err
 	}
+	//发送数据不关注响应，因为响应是由对端通过另一个连接发送过来的
 	_, err := enc.w.Write(pbutil.MustMarshal(m))
 	return err
 }
@@ -47,6 +49,7 @@ var (
 	ErrExceedSizeLimit        = errors.New("rafthttp: error limit exceeded")
 )
 
+//读取网络数据，读不到则阻塞
 func (dec *messageDecoder) decode() (raftpb.Message, error) {
 	var m raftpb.Message
 	var l uint64

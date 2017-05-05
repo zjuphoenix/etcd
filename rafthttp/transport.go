@@ -19,13 +19,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/coreos/etcd/etcdserver/stats"
-	"github.com/coreos/etcd/pkg/logutil"
-	"github.com/coreos/etcd/pkg/transport"
-	"github.com/coreos/etcd/pkg/types"
-	"github.com/coreos/etcd/raft"
-	"github.com/coreos/etcd/raft/raftpb"
-	"github.com/coreos/etcd/snap"
+	"../etcdserver/stats"
+	"../pkg/logutil"
+	"../pkg/transport"
+	"../pkg/types"
+	"../raft"
+	"../raft/raftpb"
+	"../snap"
 	"github.com/coreos/pkg/capnslog"
 	"github.com/xiang90/probing"
 	"golang.org/x/net/context"
@@ -124,6 +124,9 @@ type Transport struct {
 
 func (t *Transport) Start() error {
 	var err error
+	//follower会在stream的decodeLoop循环中通过t.streamRt从leader读取数据，包括心跳和附加日志等数据，读到后进行处理。
+	//leader也是在这里循环读取follower的数据
+	//leader和follower之间不是request-response模型，都是发送连接请求并循环主动去读取
 	t.streamRt, err = newStreamRoundTripper(t.TLSInfo, t.DialTimeout)
 	if err != nil {
 		return err

@@ -22,14 +22,14 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/coreos/etcd/etcdserver"
-	"github.com/coreos/etcd/etcdserver/api/v2http"
-	"github.com/coreos/etcd/pkg/cors"
-	"github.com/coreos/etcd/pkg/debugutil"
-	runtimeutil "github.com/coreos/etcd/pkg/runtime"
-	"github.com/coreos/etcd/pkg/transport"
-	"github.com/coreos/etcd/pkg/types"
-	"github.com/coreos/etcd/rafthttp"
+	"../etcdserver"
+	"../etcdserver/api/v2http"
+	"../pkg/cors"
+	"../pkg/debugutil"
+	runtimeutil "../pkg/runtime"
+	"../pkg/transport"
+	"../pkg/types"
+	"../rafthttp"
 	"github.com/coreos/pkg/capnslog"
 )
 

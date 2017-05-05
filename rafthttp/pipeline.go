@@ -22,11 +22,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/coreos/etcd/etcdserver/stats"
-	"github.com/coreos/etcd/pkg/pbutil"
-	"github.com/coreos/etcd/pkg/types"
-	"github.com/coreos/etcd/raft"
-	"github.com/coreos/etcd/raft/raftpb"
+	"../etcdserver/stats"
+	"../pkg/pbutil"
+	"../pkg/types"
+	"../raft"
+	"../raft/raftpb"
+	"fmt"
 )
 
 const (
@@ -79,6 +80,9 @@ func (p *pipeline) handle() {
 	for {
 		select {
 		case m := <-p.msgc:
+			if m.Type != raftpb.MsgHeartbeatResp && m.Type != raftpb.MsgHeartbeat {
+				fmt.Println("pipeline handle:", m)
+			}
 			start := time.Now()
 			err := p.post(pbutil.MustMarshal(&m))
 			end := time.Now()

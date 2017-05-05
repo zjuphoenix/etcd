@@ -24,15 +24,15 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/coreos/etcd/etcdserver/stats"
-	"github.com/coreos/etcd/pkg/fileutil"
-	"github.com/coreos/etcd/pkg/types"
-	"github.com/coreos/etcd/raft"
-	"github.com/coreos/etcd/raft/raftpb"
-	"github.com/coreos/etcd/rafthttp"
-	"github.com/coreos/etcd/snap"
-	"github.com/coreos/etcd/wal"
-	"github.com/coreos/etcd/wal/walpb"
+	"../../etcdserver/stats"
+	"../../pkg/fileutil"
+	"../../pkg/types"
+	"../../raft"
+	"../../raft/raftpb"
+	"../../rafthttp"
+	"../../snap"
+	"../../wal"
+	"../../wal/walpb"
 	"golang.org/x/net/context"
 )
 
@@ -149,6 +149,7 @@ func (rc *raftNode) publishEntries(ents []raftpb.Entry) bool {
 			}
 			s := string(ents[i].Data)
 			select {
+			//向commitC通道发送消息，kvstore会收到该消息来修改内存中的kv
 			case rc.commitC <- &s:
 			case <-rc.stopc:
 				return false
@@ -226,8 +227,11 @@ func (rc *raftNode) openWAL(snapshot *raftpb.Snapshot) *wal.WAL {
 // replayWAL replays WAL entries into the raft instance.
 func (rc *raftNode) replayWAL() *wal.WAL {
 	log.Printf("replaying WAL of member %d", rc.id)
+	//加载snapshot
 	snapshot := rc.loadSnapshot()
+	//根据snapshot创建wal,因为创建wal会用到snapshot的最后一条日志的索引和term
 	w := rc.openWAL(snapshot)
+	//根据wal读取出状态和ents
 	_, st, ents, err := w.ReadAll()
 	if err != nil {
 		log.Fatalf("raftexample: failed to read WAL (%v)", err)
@@ -267,6 +271,7 @@ func (rc *raftNode) startRaft() {
 	rc.snapshotterReady <- rc.snapshotter
 
 	oldwal := wal.Exist(rc.waldir)
+	//重放wal日志，
 	rc.wal = rc.replayWAL()
 
 	rpeers := make([]raft.Peer, len(rc.peers))
@@ -397,6 +402,7 @@ func (rc *raftNode) serveChannels() {
 	defer ticker.Stop()
 
 	// send proposals over raft
+	//监听由kvstore传递进来的消息
 	go func() {
 		var confChangeCount uint64 = 0
 
@@ -427,6 +433,7 @@ func (rc *raftNode) serveChannels() {
 	}()
 
 	// event loop on raft state machine updates
+	//监听由node传递过来的消息
 	for {
 		select {
 		//根据角色的不同Tick()为不同的处理函数
@@ -445,6 +452,7 @@ func (rc *raftNode) serveChannels() {
 			rc.raftStorage.Append(rd.Entries)
 			//处理消息
 			rc.transport.Send(rd.Messages)
+			//发布可以提交的配置，让kvstore来修改内存中的值
 			if ok := rc.publishEntries(rc.entriesToApply(rd.CommittedEntries)); !ok {
 				rc.stop()
 				return

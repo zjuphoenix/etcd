@@ -18,12 +18,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/coreos/etcd/etcdserver/stats"
-	"github.com/coreos/etcd/pkg/types"
-	"github.com/coreos/etcd/raft"
-	"github.com/coreos/etcd/raft/raftpb"
-	"github.com/coreos/etcd/snap"
+	"../etcdserver/stats"
+	"../pkg/types"
+	"../raft"
+	"../raft/raftpb"
+	"../snap"
 	"golang.org/x/net/context"
+	"fmt"
 )
 
 const (
@@ -155,6 +156,7 @@ func startPeer(transport *Transport, urls types.URLs, peerID types.ID, fs *stats
 		for {
 			select {
 			case mm := <-p.recvc:
+				//这里处理对端发送过来的数据
 				if err := r.Process(ctx, mm); err != nil {
 					plog.Warningf("failed to process raft message (%v)", err)
 				}
@@ -171,6 +173,7 @@ func startPeer(transport *Transport, urls types.URLs, peerID types.ID, fs *stats
 		for {
 			select {
 			case mm := <-p.propc:
+				//这里处理要发送的数据
 				if err := r.Process(ctx, mm); err != nil {
 					plog.Warningf("failed to process raft message (%v)", err)
 				}
